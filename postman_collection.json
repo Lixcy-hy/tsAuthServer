@@ -1,0 +1,551 @@
+{
+  "info": {
+    "name": "阿桓工具箱后端 API",
+    "description": "MockLocation 后端接口测试集合",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "健康检查",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('服务状态正常', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(0);",
+                  "    pm.expect(json.data.status).to.equal('up');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "认证",
+      "item": [
+        {
+          "name": "登录 - 成功",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account\": \"test\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('登录成功', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(0);",
+                  "    pm.expect(json.data.token).to.be.a('string');",
+                  "    pm.expect(json.data.token.length).to.be.greaterThan(0);",
+                  "    pm.expect(json.data.user.account).to.equal('test');",
+                  "    pm.environment.set('token', json.data.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "登录 - 密码错误",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account\": \"test\",\n  \"password\": \"wrong_password\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('返回账号或密码错误', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(401);",
+                  "    pm.expect(json.message).to.include('账号或密码错误');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "登录 - 账号为空",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account\": \"\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('返回参数错误', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.not.equal(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Token - 有效",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('token 有效', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(0);",
+                  "    pm.expect(json.data.authorized).to.equal(true);",
+                  "    pm.expect(json.data.expiresAt).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Token - 无效",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"invalid-token-12345\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('token 无效', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(401);",
+                  "    pm.expect(json.data.authorized).to.equal(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "刷新 Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('刷新成功', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(0);",
+                  "    pm.expect(json.data.token).to.be.a('string');",
+                  "    pm.expect(json.data.token).to.not.equal(pm.environment.get('token'));",
+                  "    pm.environment.set('token', json.data.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "退出登录",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('退出成功', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "地点搜索",
+      "item": [
+        {
+          "name": "搜索 - 正常",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/places/search?keyword=腾讯大厦&city=深圳&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "places", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "腾讯大厦"
+                },
+                {
+                  "key": "city",
+                  "value": "深圳"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('返回候选列表', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(0);",
+                  "    pm.expect(json.data.items).to.be.an('array');",
+                  "    if (json.data.items.length > 0) {",
+                  "        const item = json.data.items[0];",
+                  "        pm.expect(item.name).to.be.a('string');",
+                  "        pm.expect(item.longitude).to.be.a('number');",
+                  "        pm.expect(item.latitude).to.be.a('number');",
+                  "        pm.expect(['WGS-84', 'GCJ-02', 'BD-09']).to.include(item.coordinateType);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "搜索 - 不带 city",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/places/search?keyword=北京大学&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "places", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "北京大学"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "搜索 - keyword 为空",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/places/search?keyword=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "places", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('keyword 为空时返回错误', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.not.equal(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "搜索 - 无 Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/places/search?keyword=腾讯大厦",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "places", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "腾讯大厦"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('无 token 返回未授权', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "搜索 - Token 无效",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid-token-12345"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/places/search?keyword=腾讯大厦",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "places", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "腾讯大厦"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('无效 token 返回未授权', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "验收流程",
+      "item": [
+        {
+          "name": "完整流程：登录 → 搜索 → 刷新 → 退出",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account\": \"test\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Step 1: 登录",
+                  "pm.test('登录成功并保存 token', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.code).to.equal(0);",
+                  "    pm.expect(json.data.token).to.be.a('string');",
+                  "    pm.environment.set('token', json.data.token);",
+                  "});",
+                  "",
+                  "// Step 2: 用新 token 搜索",
+                  "pm.sendRequest({",
+                  "    url: pm.environment.get('baseUrl') + '/api/v1/places/search?keyword=腾讯大厦&city=深圳&limit=3',",
+                  "    method: 'GET',",
+                  "    header: {",
+                  "        'Authorization': 'Bearer ' + pm.environment.get('token')",
+                  "    }",
+                  "}, function (err, res) {",
+                  "    pm.test('搜索正常返回', function () {",
+                  "        pm.expect(res.code).to.equal(200);",
+                  "        const json = res.json();",
+                  "        pm.expect(json.code).to.equal(0);",
+                  "        pm.expect(json.data.items).to.be.an('array');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

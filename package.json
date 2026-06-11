@@ -1,0 +1,33 @@
+{
+  "name": "ahuan-toolbox-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "db:migrate": "bun run migrations/run.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check .",
+    "format": "biome format --write .",
+    "docker:build": "docker build -t ahuan-toolbox-server .",
+    "docker:run": "docker run -d --name ahuan-app -p 8080:8080 --env-file .env.docker ahuan-toolbox-server",
+    "docker:up": "docker compose --env-file .env.docker up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f app",
+    "docker:migrate": "docker compose exec app bun run migrations/run.ts"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "@hono/zod-validator": "^0.4.0",
+    "zod": "^3.23.8",
+    "postgres": "^3.4.5",
+    "ioredis": "^5.4.1",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/bun": "^1.1.10",
+    "typescript": "^5.6.0"
+  }
+}
