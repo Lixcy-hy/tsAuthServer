@@ -1,20 +1,35 @@
-import { sql } from "../src/lib/postgres";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { sql } from "../src/lib/postgres";
 
 async function main() {
-  const migrationPath = resolve(import.meta.dir, "001_init.sql");
-  const sqlContent = readFileSync(migrationPath, "utf-8");
+  const migrationsDir = import.meta.dir;
 
-  console.log("[migrate] running 001_init.sql ...");
-  try {
-    await sql.unsafe(sqlContent);
-    console.log("[migrate] done");
-  } catch (err) {
-    console.error("[migrate] failed:", err);
-    process.exit(1);
+  // 自动发现所有 NNN_xxx.sql，按文件名字典序执行（001 < 002 < ...）
+  const files = readdirSync(migrationsDir)
+    .filter((f) => /^\d{3}_.*\.sql$/.test(f))
+    .sort();
+
+  if (files.length === 0) {
+    console.log("[migrate] no migration files found");
+    return;
   }
+
+  for (const file of files) {
+    const path = resolve(migrationsDir, file);
+    const content = readFileSync(path, "utf-8");
+    console.log(`[migrate] running ${file} ...`);
+    try {
+      await sql.unsafe(content);
+      console.log(`[migrate] ${file} done`);
+    } catch (err) {
+      console.error(`[migrate] ${file} failed:`, err);
+      process.exit(1);
+    }
+  }
+
   await sql.end();
+  console.log("[migrate] all migrations applied");
 }
 
 main();

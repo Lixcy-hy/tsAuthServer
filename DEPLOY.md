@@ -1,50 +1,50 @@
 # Docker 部署
 
-## 方式 A：一键 Compose（推荐，最简单）
+本仓库 `docker-compose.yml` **只打包本应用**，**不**起 PostgreSQL / Redis。
+请把 `DATABASE_URL` / `REDIS_URL` 指向你已部署好的外部服务（同一台机器、云 RDS、容器里跑的其他 stack 都行）。
 
-`docker-compose.yml` 已经配置好 PostgreSQL + Redis + 应用，一键起三个容器。
+## 快速开始
 
 ```bash
-# 1. 复制并编辑环境变量
+# 1. 准备环境变量（.env 已在 .gitignore 中）
 cp .env.docker .env
-vi .env   # 改密码
+vi .env   # 填 DATABASE_URL / REDIS_URL / TOKEN_SECRET / AMAP_KEY
 
-# 2. 启动所有服务
+# 2. 构建并启动应用
 bun run docker:up
 
-# 3. 跑数据库迁移（首次部署）
+# 3. 首次部署需要执行数据库迁移
 bun run docker:migrate
 
-# 4. 看日志
+# 4. 查看日志
 bun run docker:logs
-
-# 5. 停止
-bun run docker:down
 ```
 
-## 方式 B：单容器 + 外部数据库
+## 环境变量说明
 
-假设你 VPS 上已有 PostgreSQL 和 Redis：
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `DATABASE_URL` | ✅ | `postgres://user:pass@host:5432/db?options=-c%20search_path%3Dmocklocation` |
+| `REDIS_URL` | ✅ | `redis://:password@host:6379/0` |
+| `TOKEN_SECRET` | ✅ | 任意长随机串，用于 token 指纹 |
+| `TOKEN_EXPIRE_DAYS` | 否 | 默认 30 |
+| `AMAP_KEY` | 否 | 高德 Web 服务 key，地点搜索需要 |
+| `PG_SCHEMA` | 否 | 默认 `mocklocation` |
+| `APP_PORT` | 否 | 容器内 8080 映射到宿主机的端口，默认 8080 |
+| `PLACE_SEARCH_LIMIT_PER_MINUTE` | 否 | 默认 60 |
+| `LOGIN_LIMIT_PER_MINUTE` | 否 | 默认 10 |
+| `TZ` | 否 | 默认 `Asia/Shanghai` |
 
-```bash
-# 1. 构建镜像
-bun run docker:build
+## 连接宿主机已有服务
 
-# 2. 准备环境变量文件
-cp .env.docker .env.runtime
-vi .env.runtime   # 配置 DATABASE_URL / REDIS_URL 指向你的服务
+如果你的 PG / Redis 跑在宿主机（不是 docker）上，把容器接入用 `host.docker.internal`：
 
-# 3. 启动容器
-docker run -d \
-  --name ahuan-app \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  --env-file .env.runtime \
-  ahuan-toolbox-server
-
-# 4. 跑迁移（在容器内执行一次）
-docker exec ahuan-app bun run migrations/run.ts
+```env
+DATABASE_URL=postgres://postgres:xxx@host.docker.internal:5432/location_service?options=-c%20search_path%3Dmocklocation
+REDIS_URL=redis://:xxx@host.docker.internal:6379/0
 ```
+
+并在 `docker-compose.yml` 里启用 `extra_hosts: ["host.docker.internal:host-gateway"]`（已写在注释里）。
 
 ## 验证
 
@@ -58,7 +58,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
   -d '{"account":"test","password":"123456"}'
 ```
 
-## VPS 部署步骤（全新服务器）
+## VPS 部署步骤
 
 ```bash
 # 1. 安装 Docker
@@ -66,42 +66,32 @@ curl -fsSL https://get.docker.com -o get-docker.sh
 sh get-docker.sh
 systemctl enable --now docker
 
-# 2. 上传项目（用 scp / git clone）
+# 2. 上传项目
 git clone <your-repo>
 cd mocklocation/server_ts
 
 # 3. 启动
 cp .env.docker .env
-vi .env   # 改密码、AMAP_KEY
+vi .env   # 填写连接信息
 bun run docker:up
 bun run docker:migrate
 
-# 4. 配置反向代理（Nginx / Caddy）
-# 这里略，80/443 端口代理到 8080
+# 4. 反向代理（Nginx / Caddy 代理到 8080，略）
 
-# 5. 申请 HTTPS 证书（Let's Encrypt）
+# 5. HTTPS
 # certbot --nginx -d api.example.com
 ```
-
-## 镜像大小
-
-基于 `oven/bun:1.1-alpine` + 源码，**约 80MB 左右**（Bun 镜像本身就小）。
 
 ## 常用命令
 
 ```bash
-# 查看运行状态
-docker compose ps
-
-# 进入应用容器调试
-docker compose exec app sh
-
-# 重新构建（代码改了之后）
-bun run docker:up   # --build 已经在命令里
-
-# 只重启 app 容器（不重建）
-docker compose restart app
-
-# 完全清理
-docker compose down -v   # -v 会删卷，慎用
+docker compose ps                       # 运行状态
+docker compose logs -f app              # 看日志
+docker compose restart app              # 仅重启应用
+bun run docker:up                       # 代码改了重新构建并启动
+docker compose down                     # 停止（外部 DB 不受影响）
 ```
+
+## 镜像大小
+
+基于 `oven/bun:1.1-alpine`，约 80MB 左右。

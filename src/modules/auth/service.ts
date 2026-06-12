@@ -20,7 +20,10 @@ export interface LoginResult {
 }
 
 export class AuthError extends Error {
-  constructor(public code: number, message: string) {
+  constructor(
+    public code: number,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -53,9 +56,22 @@ export const authService = {
       throw new AuthError(401, "账号或密码错误");
     }
 
-    // 生成 token 并落库
+    // 单设备登录：撤销该用户所有未过期的旧 token，同时在 Redis 标记
+    const oldTokenRows = await sql<Array<{ token_hash: string }>>`
+      UPDATE access_tokens
+      SET revoked_at = NOW()
+      WHERE user_id = ${user.id} AND revoked_at IS NULL
+      RETURNING token_hash
+    `;
+    for (const old of oldTokenRows) {
+      await markTokenRevoked(old.token_hash);
+    }
+
+    // 颁发新 token
     const { token, tokenHash } = generateToken(user.id);
-    const expiresAt = new Date(Date.now() + config.tokenExpireDays * 24 * 3600 * 1000);
+    const expiresAt = new Date(
+      Date.now() + config.tokenExpireDays * 24 * 3600 * 1000,
+    );
 
     await sql`
       INSERT INTO access_tokens (user_id, token_hash, expires_at)
@@ -73,14 +89,18 @@ export const authService = {
     };
   },
 
-  async verify(token: string): Promise<{ authorized: boolean; expiresAt: string | null }> {
+  async verify(
+    token: string,
+  ): Promise<{ authorized: boolean; expiresAt: string | null }> {
     if (!token) {
       return { authorized: false, expiresAt: null };
     }
 
     const tokenHash = hashToken(token);
 
-    const rows = await sql<Array<{ expires_at: Date; revoked_at: Date | null; status: string }>>`
+    const rows = await sql<
+      Array<{ expires_at: Date; revoked_at: Date | null; status: string }>
+    >`
       SELECT at.expires_at, at.revoked_at, u.status
       FROM access_tokens at
       JOIN users u ON u.id = at.user_id
@@ -125,14 +145,18 @@ export const authService = {
 
     // 颁发新 token
     const { token, tokenHash: newHash } = generateToken(userId);
-    const expiresAt = new Date(Date.now() + config.tokenExpireDays * 24 * 3600 * 1000);
+    const expiresAt = new Date(
+      Date.now() + config.tokenExpireDays * 24 * 3600 * 1000,
+    );
 
     await sql`
       INSERT INTO access_tokens (user_id, token_hash, expires_at)
       VALUES (${userId}, ${newHash}, ${expiresAt})
     `;
 
-    const rows = await sql<Array<{ id: string; account: string; name: string }>>`
+    const rows = await sql<
+      Array<{ id: string; account: string; name: string }>
+    >`
       SELECT id, account, name FROM users WHERE id = ${userId} LIMIT 1
     `;
 
