@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { config } from "../../config";
 import { sql } from "../../lib/postgres";
-import { fail, ok } from "../../lib/response";
 import { redis } from "../../lib/redis";
+import { fail, ok } from "../../lib/response";
 
 export const healthRoutes = new Hono().get("/", async (c) => {
   let pgOk = false;

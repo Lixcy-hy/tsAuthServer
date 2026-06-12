@@ -1,11 +1,11 @@
+import { zValidator } from "@hono/zod-validator";
 import type { Context } from "hono";
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { config } from "../../config";
+import { fail, ok } from "../../lib/response";
 import { authMiddleware } from "../../middleware/auth";
 import { rateLimitMiddleware } from "../../middleware/rate-limit";
-import { fail, ok } from "../../lib/response";
 import { AuthError, authService } from "./service";
 
 const loginSchema = z.object({
