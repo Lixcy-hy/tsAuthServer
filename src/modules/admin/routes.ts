@@ -1,11 +1,13 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { adminAuthMiddleware } from "../../middleware/admin-auth";
+import { fail, ok } from "../../lib/response";
 import { adminService, AdminError } from "./service";
 import { releaseService, ReleaseError } from "./release-service";
-import { fail, ok } from "../../lib/response";
-import { adminAuthMiddleware } from "../../middleware/admin-auth";
 
+function handleAdminError(c: Context, err: unknown) {
 const createUserSchema = z.object({
   account: z.string().min(2, "账号至少2个字符").max(64),
   password: z.string().min(6, "密码至少6个字符"),

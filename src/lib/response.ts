@@ -8,6 +8,11 @@ export function ok<T>(c: Context, data: T, message = "ok") {
   return c.json({ code: 0, message, data });
 }
 
-export function fail(c: Context, code: number, message: string, data: unknown = null) {
+export function fail(
+  c: Context,
+  code: number,
+  message: string,
+  data: unknown = null,
+) {
   return c.json({ code, message, data });
 }

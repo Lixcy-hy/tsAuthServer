@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
-import { hashToken, isTokenRevoked } from "../lib/token";
 import { sql } from "../lib/postgres";
 import { fail } from "../lib/response";
+import { hashToken, isTokenRevoked } from "../lib/token";
 
 /**
  * 管理员鉴权中间件

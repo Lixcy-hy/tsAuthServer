@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
+import { config } from "../../config";
 import { sql } from "../../lib/postgres";
 import { generateToken, hashToken, markTokenRevoked } from "../../lib/token";
-import { config } from "../../config";
 
 export interface UserRow {
   id: string;

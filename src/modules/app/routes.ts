@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { appService } from "./service";
 import { fail, ok } from "../../lib/response";
+import { appService } from "./service";
 
 const querySchema = z.object({
   platform: z.literal("android").or(z.string().min(1)),

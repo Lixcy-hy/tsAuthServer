@@ -2,15 +2,15 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { requestId } from "hono/request-id";
-import { authRoutes } from "./modules/auth";
-import { placesRoutes } from "./modules/places";
-import { healthRoutes } from "./modules/health";
-import { adminRoutes, releaseAdminRoutes } from "./modules/admin";
-import { staticRoutes } from "./modules/static";
-import { appRoutes } from "./modules/app";
 import { config } from "./config";
 import { sql } from "./lib/postgres";
 import { redis } from "./lib/redis";
+import { adminRoutes, releaseAdminRoutes } from "./modules/admin";
+import { appRoutes } from "./modules/app";
+import { authRoutes } from "./modules/auth";
+import { healthRoutes } from "./modules/health";
+import { placesRoutes } from "./modules/places";
+import { staticRoutes } from "./modules/static";
 
 async function checkConnections() {
   // PostgreSQL

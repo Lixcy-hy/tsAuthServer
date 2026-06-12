@@ -1,11 +1,12 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { authService, AuthError } from "./service";
-import { fail, ok } from "../../lib/response";
-import { rateLimitMiddleware } from "../../middleware/rate-limit";
-import { authMiddleware } from "../../middleware/auth";
 import { config } from "../../config";
+import { authMiddleware } from "../../middleware/auth";
+import { rateLimitMiddleware } from "../../middleware/rate-limit";
+import { fail, ok } from "../../lib/response";
+import { AuthError, authService } from "./service";
 
 const loginSchema = z.object({
   account: z.string().min(1, "账号不能为空"),
@@ -16,7 +17,7 @@ const verifySchema = z.object({
   token: z.string().min(1, "token 不能为空"),
 });
 
-function handleAuthError(c: any, err: unknown) {
+function handleAuthError(c: Context, err: unknown) {
   if (err instanceof AuthError) {
     return fail(c, err.code, err.message);
   }

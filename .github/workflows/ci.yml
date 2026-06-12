@@ -11,11 +11,6 @@ jobs:
     name: Lint & Typecheck
     runs-on: self-hosted
     env:
-      # 如果 VPS 有代理，取消下面注释并填实际地址
-      # HTTP_PROXY: http://127.0.0.1:7890
-      # HTTPS_PROXY: http://127.0.0.1:7890
-      # 如果 npm registry 慢，可以用淘宝镜像
-      # BUN_CONFIG_REGISTRY: https://registry.npmmirror.com
       BUN_CONFIG_REGISTRY: https://registry.npmmirror.com
     steps:
       - uses: actions/checkout@v4

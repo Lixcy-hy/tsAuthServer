@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
-import { hashToken, isTokenRevoked } from "../lib/token";
 import { sql } from "../lib/postgres";
 import { fail } from "../lib/response";
+import { hashToken, isTokenRevoked } from "../lib/token";
 
 /**
  * Bearer Token 鉴权中间件
@@ -29,7 +29,12 @@ export async function authMiddleware(c: Context, next: Next) {
 
   // 查 DB 验证
   const rows = await sql<
-    Array<{ user_id: string; expires_at: Date; revoked_at: Date | null; status: string }>
+    Array<{
+      user_id: string;
+      expires_at: Date;
+      revoked_at: Date | null;
+      status: string;
+    }>
   >`
     SELECT at.user_id, at.expires_at, at.revoked_at, u.status
     FROM access_tokens at

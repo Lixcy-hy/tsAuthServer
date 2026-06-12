@@ -7,7 +7,10 @@ import { redis } from "../lib/redis";
  * 明文格式：<random>.<hmac_short>
  * 这样 hash 长度可控且不可逆。
  */
-export function generateToken(userId: string): { token: string; tokenHash: string } {
+export function generateToken(userId: string): {
+  token: string;
+  tokenHash: string;
+} {
   const random = randomUUID().replace(/-/g, "");
   const fingerprint = createHash("sha256")
     .update(`${userId}.${config.tokenSecret}.${random}`)
@@ -34,5 +37,10 @@ export async function isTokenRevoked(tokenHash: string): Promise<boolean> {
 
 export async function markTokenRevoked(tokenHash: string): Promise<void> {
   // 撤销标记保留 90 天，足够覆盖最长 token 有效期
-  await redis.set(`token:revoked:${tokenHash}`, REVOKE_MARKER, "EX", 90 * 24 * 3600);
+  await redis.set(
+    `token:revoked:${tokenHash}`,
+    REVOKE_MARKER,
+    "EX",
+    90 * 24 * 3600,
+  );
 }

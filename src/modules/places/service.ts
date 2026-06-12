@@ -1,5 +1,5 @@
+import { type PlaceItem, searchAmap } from "../../lib/amap";
 import { sql } from "../../lib/postgres";
-import { searchAmap, type PlaceItem } from "../../lib/amap";
 
 const VALID_COORD_TYPES = new Set(["WGS-84", "GCJ-02", "BD-09"]);
 

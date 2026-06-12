@@ -29,16 +29,17 @@ export const adminService = {
     let total: number;
 
     if (keyword) {
+      const like = `%${keyword}%`;
       users = await sql<AdminUser[]>`
         SELECT id, account, name, status, role, created_at, updated_at
         FROM users
-        WHERE account ILIKE ${"%" + keyword + "%"} OR name ILIKE ${"%" + keyword + "%"}
+        WHERE account ILIKE ${like} OR name ILIKE ${like}
         ORDER BY created_at DESC
         LIMIT ${pageSize} OFFSET ${offset}
       `;
       const countResult = await sql<[{ count: number }]>`
         SELECT COUNT(*) as count FROM users
-        WHERE account ILIKE ${"%" + keyword + "%"} OR name ILIKE ${"%" + keyword + "%"}
+        WHERE account ILIKE ${like} OR name ILIKE ${like}
       `;
       total = countResult[0].count;
     } else {
@@ -92,7 +93,12 @@ export const adminService = {
 
   async updateUser(
     id: string,
-    input: { name?: string; status?: string; password?: string; role?: string },
+    input: {
+      name?: string;
+      status?: string;
+      password?: string;
+      role?: string;
+    },
   ) {
     const user = await sql<
       AdminUser[]

@@ -3,7 +3,7 @@
   "vcs": { "enabled": false },
   "files": {
     "ignoreUnknown": false,
-    "ignore": ["node_modules", "dist"]
+    "ignore": ["node_modules", "dist", "tsconfig.json"]
   },
   "formatter": {
     "enabled": true,
