@@ -97,6 +97,27 @@
         getStats() {
           return this.request("/admin/stats");
         },
+        // ── Release 管理 ─────────────────────────────
+        listReleases(params) {
+          return this.request(
+            "/admin/releases?" + new URLSearchParams(params).toString(),
+          );
+        },
+        createRelease(data) {
+          return this.request("/admin/releases", {
+            method: "POST",
+            body: JSON.stringify(data),
+          });
+        },
+        updateRelease(id, data) {
+          return this.request("/admin/releases/" + id, {
+            method: "PATCH",
+            body: JSON.stringify(data),
+          });
+        },
+        deleteRelease(id) {
+          return this.request("/admin/releases/" + id, { method: "DELETE" });
+        },
       };
 
       function Toast({ msg, type, onClose }) {
@@ -118,11 +139,15 @@
         );
       }
 
-      function Modal({ open, onClose, title, children }) {
+      function Modal({ open, onClose, title, children, wide }) {
         if (!open) return null;
         return (
           <div className="fixed inset-0 z-40 flex items-center justify-center modal-backdrop bg-black/30">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div
+              className={`bg-white rounded-lg shadow-xl w-full mx-4 ${
+                wide ? "max-w-2xl" : "max-w-md"
+              }`}
+            >
               <div className="flex justify-between items-center px-6 py-4 border-b">
                 <h3 className="text-lg font-semibold">{title}</h3>
                 <button
@@ -132,7 +157,9 @@
                   &times;
                 </button>
               </div>
-              <div className="px-6 py-4">{children}</div>
+              <div className="px-6 py-4 max-h-[80vh] overflow-y-auto">
+                {children}
+              </div>
             </div>
           </div>
         );
@@ -377,24 +404,293 @@
         );
       }
 
+      function ReleaseRow({
+        r,
+        onEdit,
+        onDelete,
+        onToggleEnabled,
+        onToggleForce,
+      }) {
+        return (
+          <tr className="hover:bg-gray-50">
+            <td className="px-4 py-3 text-sm text-gray-500">{r.id}</td>
+            <td className="px-4 py-3 text-sm">{r.platform}</td>
+            <td className="px-4 py-3 text-sm text-gray-600">
+              {r.package_name}
+            </td>
+            <td className="px-4 py-3 font-medium">{r.version_name}</td>
+            <td className="px-4 py-3 text-sm text-gray-600">
+              {r.version_code}
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-600">
+              {r.min_version_code ?? "-"}
+            </td>
+            <td
+              className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate"
+              title={r.message || ""}
+            >
+              {r.message || "-"}
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-600">
+              {r.download_urls?.length || 0} 个
+            </td>
+            <td className="px-4 py-3">
+              <button
+                onClick={() => onToggleForce(r)}
+                className={`text-xs px-2 py-1 rounded mr-1 ${
+                  r.force_update
+                    ? "bg-red-100 text-red-700"
+                    : "bg-gray-100 text-gray-500"
+                }`}
+                title="点击切换强制更新"
+              >
+                {r.force_update ? "强制" : "可选"}
+              </button>
+            </td>
+            <td className="px-4 py-3">
+              <button
+                onClick={() => onToggleEnabled(r)}
+                className={`text-xs px-2 py-1 rounded ${
+                  r.enabled
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-200 text-gray-500"
+                }`}
+                title="点击切换启用状态"
+              >
+                {r.enabled ? "启用" : "停用"}
+              </button>
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-500">
+              {new Date(r.updated_at).toLocaleString("zh-CN")}
+            </td>
+            <td className="px-4 py-3 text-right">
+              <button
+                onClick={() => onEdit(r)}
+                className="text-xs px-2 py-1 mr-1 text-blue-600 hover:bg-blue-50 rounded"
+              >
+                编辑
+              </button>
+              <button
+                onClick={() => onDelete(r)}
+                className="text-xs px-2 py-1 text-red-600 hover:bg-red-50 rounded"
+              >
+                删除
+              </button>
+            </td>
+          </tr>
+        );
+      }
+
+      function ReleaseForm({ initial, onSave, onCancel }) {
+        const [packageName, setPackageName] = useState(
+          initial?.package_name || "com.lixcystudio.mobiletools",
+        );
+        const [versionName, setVersionName] = useState(
+          initial?.version_name || "",
+        );
+        const [versionCode, setVersionCode] = useState(
+          initial?.version_code || 1,
+        );
+        const [minVersionCode, setMinVersionCode] = useState(
+          initial?.min_version_code ?? "",
+        );
+        const [message, setMessage] = useState(initial?.message || "");
+        const [downloadUrlsText, setDownloadUrlsText] = useState(() => {
+          try {
+            const raw = initial?.download_urls;
+            if (!raw) return "";
+            const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return Array.isArray(arr) ? arr.join("\n") : String(arr);
+          } catch {
+            return "";
+          }
+        });
+        const [forceUpdate, setForceUpdate] = useState(
+          initial?.force_update || false,
+        );
+        const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+        const [notes, setNotes] = useState(initial?.notes || "");
+        const [loading, setLoading] = useState(false);
+        const [err, setErr] = useState("");
+
+        const submit = async (e) => {
+          e.preventDefault();
+          setLoading(true);
+          setErr("");
+          try {
+            const downloadUrls = downloadUrlsText
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (downloadUrls.length === 0) {
+              throw new Error("至少填写一个下载地址");
+            }
+            // 简单校验 URL 格式
+            for (const u of downloadUrls) {
+              try {
+                new URL(u);
+              } catch {
+                throw new Error("下载地址格式不合法: " + u);
+              }
+            }
+            const data = {
+              packageName,
+              versionName,
+              versionCode: Number(versionCode),
+              minVersionCode:
+                minVersionCode === "" ? null : Number(minVersionCode),
+              message: message || null,
+              downloadUrls,
+              forceUpdate,
+              enabled,
+              notes: notes || null,
+            };
+            await onSave(data);
+          } catch (e) {
+            setErr(e.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        return (
+          <form onSubmit={submit} className="space-y-3">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">包名 *</label>
+              <input
+                type="text"
+                value={packageName}
+                onChange={(e) => setPackageName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  版本名 *
+                </label>
+                <input
+                  type="text"
+                  value={versionName}
+                  onChange={(e) => setVersionName(e.target.value)}
+                  placeholder="1.0.0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  版本号 *
+                </label>
+                <input
+                  type="number"
+                  value={versionCode}
+                  onChange={(e) => setVersionCode(e.target.value)}
+                  min="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">
+                最低可用版本号（低于此版本会被强制更新；留空 = 不限制）
+              </label>
+              <input
+                type="number"
+                value={minVersionCode}
+                onChange={(e) => setMinVersionCode(e.target.value)}
+                min="1"
+                placeholder="留空"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">
+                更新提示文案（留空使用 App 默认）
+              </label>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={2}
+                placeholder="例如：当前版本已不可继续使用，请下载并安装最新 APK。"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">
+                下载地址（每行一个，至少一个）*
+              </label>
+              <textarea
+                value={downloadUrlsText}
+                onChange={(e) => setDownloadUrlsText(e.target.value)}
+                rows={3}
+                placeholder={
+                  "https://example.com/app-release.apk\nhttps://mirror.example.com/app-release.apk"
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 font-mono text-xs"
+                required
+              />
+            </div>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={forceUpdate}
+                  onChange={(e) => setForceUpdate(e.target.checked)}
+                />
+                强制更新（所有老版本都被阻断）
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => setEnabled(e.target.checked)}
+                />
+                启用（取消勾选 = 下架）
+              </label>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">
+                备注（仅内部查看，不下发到 App）
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="发布说明 / 改动记录"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            {err && <div className="text-red-500 text-sm">{err}</div>}
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="flex-1 py-2 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+              >
+                {loading ? "保存中…" : "保存"}
+              </button>
+            </div>
+          </form>
+        );
+      }
+
       function App() {
         const [user, setUser] = useState(null);
         const [loading, setLoading] = useState(true);
-        const [users, setUsers] = useState([]);
-        const [stats, setStats] = useState({});
-        const [pagination, setPagination] = useState({
-          page: 1,
-          pageSize: 20,
-          total: 0,
-          totalPages: 0,
-        });
-        const [keyword, setKeyword] = useState("");
-        const [editing, setEditing] = useState(null);
-        const [creating, setCreating] = useState(false);
         const [toast, setToast] = useState(null);
-
         const showToast = (msg, type = "success") => setToast({ msg, type });
 
+        // ── 认证 ────────────────────────────────────
         useEffect(() => {
           const t = API.getToken();
           if (t) {
@@ -416,19 +712,51 @@
           }
         }, []);
 
+        const logout = () => {
+          API.setToken("");
+          setUser(null);
+        };
+
+        // ── Tab ──────────────────────────────────────
+        const [tab, setTab] = useState("users");
+
+        // ── 用户管理状态 ────────────────────────────
+        const [users, setUsers] = useState([]);
+        const [stats, setStats] = useState({});
+        const [uPagination, setUPagination] = useState({
+          page: 1,
+          pageSize: 20,
+          total: 0,
+          totalPages: 0,
+        });
+        const [keyword, setKeyword] = useState("");
+        const [editingUser, setEditingUser] = useState(null);
+        const [creatingUser, setCreatingUser] = useState(false);
+
+        // ── 版本发布状态 ────────────────────────────
+        const [releases, setReleases] = useState([]);
+        const [rPagination, setRPagination] = useState({
+          page: 1,
+          pageSize: 20,
+          total: 0,
+          totalPages: 0,
+        });
+        const [editingRelease, setEditingRelease] = useState(null);
+        const [creatingRelease, setCreatingRelease] = useState(false);
+
+        // ── 用户管理 fetch / handlers ────────────────
         const fetchUsers = useCallback(
           async (page = 1) => {
             try {
               const res = await API.listUsers({ page, pageSize: 20, keyword });
               setUsers(res.data.users);
-              setPagination(res.data.pagination);
+              setUPagination(res.data.pagination);
             } catch (e) {
               showToast(e.message, "error");
             }
           },
           [keyword],
         );
-
         const fetchStats = useCallback(async () => {
           try {
             const res = await API.getStats();
@@ -448,18 +776,18 @@
           fetchUsers(1);
         };
 
-        const handleSave = async (data) => {
+        const handleSaveUser = async (data) => {
           try {
-            if (editing) {
-              await API.updateUser(editing.id, data);
+            if (editingUser) {
+              await API.updateUser(editingUser.id, data);
               showToast("更新成功");
             } else {
               await API.createUser(data);
               showToast("创建成功");
             }
-            setEditing(null);
-            setCreating(false);
-            fetchUsers(pagination.page);
+            setEditingUser(null);
+            setCreatingUser(false);
+            fetchUsers(uPagination.page);
             fetchStats();
           } catch (e) {
             throw e;
@@ -467,43 +795,111 @@
         };
 
         const handleToggleStatus = async (u) => {
-          const newStatus = u.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
+          const ns = u.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
           if (
             !confirm(
-              `确定要${newStatus === "DISABLED" ? "禁用" : "启用"}账号 ${u.account} 吗？`,
+              `确定要${ns === "DISABLED" ? "禁用" : "启用"}账号 ${u.account} 吗？`,
             )
           )
             return;
           try {
-            await API.updateUser(u.id, { status: newStatus });
-            showToast(`${newStatus === "DISABLED" ? "禁用" : "启用"}成功`);
-            fetchUsers(pagination.page);
+            await API.updateUser(u.id, { status: ns });
+            showToast(`${ns === "DISABLED" ? "禁用" : "启用"}成功`);
+            fetchUsers(uPagination.page);
             fetchStats();
           } catch (e) {
             showToast(e.message, "error");
           }
         };
 
-        const handleDelete = async (u) => {
+        const handleDeleteUser = async (u) => {
           if (!confirm(`确定要删除账号 ${u.account} 吗？此操作不可恢复！`))
             return;
           try {
             await API.deleteUser(u.id);
             showToast("删除成功");
-            fetchUsers(pagination.page);
+            fetchUsers(uPagination.page);
             fetchStats();
           } catch (e) {
             showToast(e.message, "error");
           }
         };
 
-        const logout = () => {
-          API.setToken("");
-          setUser(null);
-          setUsers([]);
-          setStats({});
+        // ── 版本发布 fetch / handlers ────────────────
+        const fetchReleases = useCallback(async (page = 1) => {
+          try {
+            const res = await API.listReleases({ page, pageSize: 20 });
+            setReleases(res.data.items);
+            setRPagination(res.data.pagination);
+          } catch (e) {
+            showToast(e.message, "error");
+          }
+        }, []);
+
+        useEffect(() => {
+          if (user && tab === "releases") fetchReleases(1);
+        }, [tab, user]);
+
+        const handleSaveRelease = async (data) => {
+          try {
+            if (editingRelease) {
+              await API.updateRelease(editingRelease.id, data);
+              showToast("更新成功");
+            } else {
+              await API.createRelease(data);
+              showToast("创建成功");
+            }
+            setEditingRelease(null);
+            setCreatingRelease(false);
+            fetchReleases(rPagination.page);
+          } catch (e) {
+            throw e;
+          }
         };
 
+        const handleToggleEnabled = async (r) => {
+          const next = !r.enabled;
+          if (
+            !confirm(`确定要${next ? "启用" : "停用"} v${r.version_name} 吗？`)
+          )
+            return;
+          try {
+            await API.updateRelease(r.id, { enabled: next });
+            showToast(next ? "已启用" : "已停用");
+            fetchReleases(rPagination.page);
+          } catch (e) {
+            showToast(e.message, "error");
+          }
+        };
+
+        const handleToggleForce = async (r) => {
+          const next = !r.force_update;
+          try {
+            await API.updateRelease(r.id, { forceUpdate: next });
+            showToast(next ? "已开启强制更新" : "已关闭强制更新");
+            fetchReleases(rPagination.page);
+          } catch (e) {
+            showToast(e.message, "error");
+          }
+        };
+
+        const handleDeleteRelease = async (r) => {
+          if (
+            !confirm(
+              `确定要删除版本 v${r.version_name}（${r.version_code}）吗？`,
+            )
+          )
+            return;
+          try {
+            await API.deleteRelease(r.id);
+            showToast("删除成功");
+            fetchReleases(rPagination.page);
+          } catch (e) {
+            showToast(e.message, "error");
+          }
+        };
+
+        // ── 渲染 ─────────────────────────────────────
         if (loading)
           return (
             <div className="min-h-screen flex items-center justify-center">
@@ -511,6 +907,11 @@
             </div>
           );
         if (!user) return <LoginPage onLogin={setUser} />;
+
+        const tabs = [
+          { key: "users", label: "👤 用户管理" },
+          { key: "releases", label: "📦 版本发布" },
+        ];
 
         return (
           <div className="min-h-screen">
@@ -533,107 +934,237 @@
               </div>
             </header>
             <main className="max-w-7xl mx-auto px-4 py-6">
-              <StatsBar stats={stats} />
-              <div className="bg-white rounded-lg shadow p-4 mb-4 flex gap-3 items-center">
-                <form onSubmit={handleSearch} className="flex-1 flex gap-2">
-                  <input
-                    type="text"
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    placeholder="搜索账号或显示名…"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
-                  />
+              {/* Tab 切换 */}
+              <div className="flex gap-1 mb-6 border-b">
+                {tabs.map((t) => (
                   <button
-                    type="submit"
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded"
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`px-4 py-2 -mb-px text-sm font-medium border-b-2 transition ${
+                      tab === t.key
+                        ? "border-blue-500 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700"
+                    }`}
                   >
-                    搜索
+                    {t.label}
                   </button>
-                </form>
-                <button
-                  onClick={() => setCreating(true)}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  + 新建用户
-                </button>
+                ))}
               </div>
-              <div className="bg-white rounded-lg shadow overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
-                    <tr>
-                      <th className="px-4 py-3">ID</th>
-                      <th className="px-4 py-3">账号</th>
-                      <th className="px-4 py-3">显示名</th>
-                      <th className="px-4 py-3">角色</th>
-                      <th className="px-4 py-3">状态</th>
-                      <th className="px-4 py-3">创建时间</th>
-                      <th className="px-4 py-3 text-right">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {users.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan="7"
-                          className="px-4 py-8 text-center text-gray-400"
-                        >
-                          暂无数据
-                        </td>
-                      </tr>
-                    ) : (
-                      users.map((u) => (
-                        <UserRow
-                          key={u.id}
-                          user={u}
-                          onEdit={setEditing}
-                          onDelete={handleDelete}
-                          onToggleStatus={handleToggleStatus}
-                        />
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              {pagination.totalPages > 1 && (
-                <div className="mt-4 flex justify-center gap-2">
-                  <button
-                    onClick={() => fetchUsers(pagination.page - 1)}
-                    disabled={pagination.page <= 1}
-                    className="px-3 py-1 border rounded disabled:opacity-50"
+
+              {/* ── 用户管理 Tab ─────────────────────── */}
+              {tab === "users" && (
+                <>
+                  <StatsBar stats={stats} />
+                  <div className="bg-white rounded-lg shadow p-4 mb-4 flex gap-3 items-center">
+                    <form onSubmit={handleSearch} className="flex-1 flex gap-2">
+                      <input
+                        type="text"
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        placeholder="搜索账号或显示名…"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded"
+                      >
+                        搜索
+                      </button>
+                    </form>
+                    <button
+                      onClick={() => setCreatingUser(true)}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      + 新建用户
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg shadow overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+                        <tr>
+                          <th className="px-4 py-3">ID</th>
+                          <th className="px-4 py-3">账号</th>
+                          <th className="px-4 py-3">显示名</th>
+                          <th className="px-4 py-3">角色</th>
+                          <th className="px-4 py-3">状态</th>
+                          <th className="px-4 py-3">创建时间</th>
+                          <th className="px-4 py-3 text-right">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {users.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan="7"
+                              className="px-4 py-8 text-center text-gray-400"
+                            >
+                              暂无数据
+                            </td>
+                          </tr>
+                        ) : (
+                          users.map((u) => (
+                            <UserRow
+                              key={u.id}
+                              user={u}
+                              onEdit={setEditingUser}
+                              onDelete={handleDeleteUser}
+                              onToggleStatus={handleToggleStatus}
+                            />
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {uPagination.totalPages > 1 && (
+                    <div className="mt-4 flex justify-center gap-2">
+                      <button
+                        onClick={() => fetchUsers(uPagination.page - 1)}
+                        disabled={uPagination.page <= 1}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        上一页
+                      </button>
+                      <span className="px-3 py-1">
+                        {uPagination.page} / {uPagination.totalPages} (共{" "}
+                        {uPagination.total} 条)
+                      </span>
+                      <button
+                        onClick={() => fetchUsers(uPagination.page + 1)}
+                        disabled={uPagination.page >= uPagination.totalPages}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        下一页
+                      </button>
+                    </div>
+                  )}
+                  <Modal
+                    open={!!editingUser || creatingUser}
+                    onClose={() => {
+                      setEditingUser(null);
+                      setCreatingUser(false);
+                    }}
+                    title={
+                      editingUser
+                        ? `编辑用户 - ${editingUser.account}`
+                        : "新建用户"
+                    }
                   >
-                    上一页
-                  </button>
-                  <span className="px-3 py-1">
-                    {pagination.page} / {pagination.totalPages} (共{" "}
-                    {pagination.total} 条)
-                  </span>
-                  <button
-                    onClick={() => fetchUsers(pagination.page + 1)}
-                    disabled={pagination.page >= pagination.totalPages}
-                    className="px-3 py-1 border rounded disabled:opacity-50"
+                    <UserForm
+                      initial={editingUser}
+                      onSave={handleSaveUser}
+                      onCancel={() => {
+                        setEditingUser(null);
+                        setCreatingUser(false);
+                      }}
+                    />
+                  </Modal>
+                </>
+              )}
+
+              {/* ── 版本发布 Tab ─────────────────────── */}
+              {tab === "releases" && (
+                <>
+                  <div className="bg-white rounded-lg shadow p-4 mb-4 flex items-center justify-between">
+                    <p className="text-sm text-gray-500">
+                      管理 App 版本发布、强制更新、下载地址等
+                    </p>
+                    <button
+                      onClick={() => setCreatingRelease(true)}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      + 发布新版本
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg shadow overflow-x-auto">
+                    <table className="w-full min-w-[1100px]">
+                      <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+                        <tr>
+                          <th className="px-4 py-3">ID</th>
+                          <th className="px-4 py-3">平台</th>
+                          <th className="px-4 py-3">包名</th>
+                          <th className="px-4 py-3">版本名</th>
+                          <th className="px-4 py-3">版本号</th>
+                          <th className="px-4 py-3">最低版本</th>
+                          <th className="px-4 py-3">提示文案</th>
+                          <th className="px-4 py-3">下载地址</th>
+                          <th className="px-4 py-3">强制</th>
+                          <th className="px-4 py-3">状态</th>
+                          <th className="px-4 py-3">更新时间</th>
+                          <th className="px-4 py-3 text-right">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {releases.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan="12"
+                              className="px-4 py-8 text-center text-gray-400"
+                            >
+                              暂无版本，点击上方按钮发布
+                            </td>
+                          </tr>
+                        ) : (
+                          releases.map((r) => (
+                            <ReleaseRow
+                              key={r.id}
+                              r={r}
+                              onEdit={setEditingRelease}
+                              onDelete={handleDeleteRelease}
+                              onToggleEnabled={handleToggleEnabled}
+                              onToggleForce={handleToggleForce}
+                            />
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {rPagination.totalPages > 1 && (
+                    <div className="mt-4 flex justify-center gap-2">
+                      <button
+                        onClick={() => fetchReleases(rPagination.page - 1)}
+                        disabled={rPagination.page <= 1}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        上一页
+                      </button>
+                      <span className="px-3 py-1">
+                        {rPagination.page} / {rPagination.totalPages} (共{" "}
+                        {rPagination.total} 条)
+                      </span>
+                      <button
+                        onClick={() => fetchReleases(rPagination.page + 1)}
+                        disabled={rPagination.page >= rPagination.totalPages}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        下一页
+                      </button>
+                    </div>
+                  )}
+                  <Modal
+                    open={!!editingRelease || creatingRelease}
+                    onClose={() => {
+                      setEditingRelease(null);
+                      setCreatingRelease(false);
+                    }}
+                    title={
+                      editingRelease
+                        ? `编辑版本 v${editingRelease.version_name}`
+                        : "发布新版本"
+                    }
+                    wide
                   >
-                    下一页
-                  </button>
-                </div>
+                    <ReleaseForm
+                      initial={editingRelease}
+                      onSave={handleSaveRelease}
+                      onCancel={() => {
+                        setEditingRelease(null);
+                        setCreatingRelease(false);
+                      }}
+                    />
+                  </Modal>
+                </>
               )}
             </main>
-            <Modal
-              open={!!editing || creating}
-              onClose={() => {
-                setEditing(null);
-                setCreating(false);
-              }}
-              title={editing ? `编辑用户 - ${editing.account}` : "新建用户"}
-            >
-              <UserForm
-                initial={editing}
-                onSave={handleSave}
-                onCancel={() => {
-                  setEditing(null);
-                  setCreating(false);
-                }}
-              />
-            </Modal>
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}
           </div>
         );

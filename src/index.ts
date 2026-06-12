@@ -5,8 +5,9 @@ import { requestId } from "hono/request-id";
 import { authRoutes } from "./modules/auth";
 import { placesRoutes } from "./modules/places";
 import { healthRoutes } from "./modules/health";
-import { adminRoutes } from "./modules/admin";
+import { adminRoutes, releaseAdminRoutes } from "./modules/admin";
 import { staticRoutes } from "./modules/static";
+import { appRoutes } from "./modules/app";
 import { config } from "./config";
 import { sql } from "./lib/postgres";
 import { redis } from "./lib/redis";
@@ -52,7 +53,7 @@ app.use(
   "*",
   cors({
     origin: "*",
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
   }),
@@ -63,6 +64,8 @@ app.route("/api/v1/health", healthRoutes);
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/places", placesRoutes);
 app.route("/api/v1/admin", adminRoutes);
+app.route("/api/v1/admin", releaseAdminRoutes);
+app.route("/api/v1/app", appRoutes);
 app.route("/admin", staticRoutes);
 
 // ── 全局错误兜底 ─────────────────────────────────────────────────

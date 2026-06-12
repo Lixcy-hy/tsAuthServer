@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { adminService, AdminError } from "./service";
+import { releaseService, ReleaseError } from "./release-service";
 import { fail, ok } from "../../lib/response";
 import { adminAuthMiddleware } from "../../middleware/admin-auth";
 
@@ -105,3 +106,113 @@ export const adminRoutes = new Hono()
       }
     },
   );
+
+// ── App Release 管理（后台 API）─────────────────────────────────────
+export const releaseAdminRoutes = new Hono()
+  .use("*", adminAuthMiddleware)
+  // 列表
+  .get("/releases", async (c) => {
+    try {
+      const page = Number(c.req.query("page") || "1");
+      const pageSize = Number(c.req.query("pageSize") || "20");
+      const platform = c.req.query("platform") || undefined;
+      const packageName = c.req.query("packageName") || undefined;
+      const result = await releaseService.listReleases({
+        page,
+        pageSize,
+        platform,
+        packageName,
+      });
+      return ok(c, result);
+    } catch (err) {
+      return handleAdminError(c, err);
+    }
+  })
+  // 详情
+  .get("/releases/:id", async (c) => {
+    try {
+      const id = c.req.param("id");
+      const item = await releaseService.getRelease(id);
+      if (!item) return fail(c, 404, "版本不存在");
+      return ok(c, item);
+    } catch (err) {
+      return handleAdminError(c, err);
+    }
+  })
+  // 新建
+  .post(
+    "/releases",
+    zValidator(
+      "json",
+      z.object({
+        platform: z.string().min(1).default("android"),
+        packageName: z.string().min(1),
+        versionName: z.string().min(1),
+        versionCode: z.coerce.number().int().positive(),
+        forceUpdate: z.boolean().optional().default(false),
+        minVersionCode: z.coerce
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .nullable(),
+        message: z.string().optional().nullable(),
+        downloadUrls: z.array(z.string().url()).min(1),
+        enabled: z.boolean().optional().default(true),
+        notes: z.string().optional().nullable(),
+      }),
+    ),
+    async (c) => {
+      try {
+        const input = c.req.valid("json");
+        const item = await releaseService.createRelease(input);
+        return ok(c, item);
+      } catch (err) {
+        if (err instanceof ReleaseError) return fail(c, err.code, err.message);
+        return handleAdminError(c, err);
+      }
+    },
+  )
+  // 更新
+  .patch(
+    "/releases/:id",
+    zValidator(
+      "json",
+      z.object({
+        versionName: z.string().min(1).optional(),
+        forceUpdate: z.boolean().optional(),
+        minVersionCode: z.coerce
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .nullable(),
+        message: z.string().optional().nullable(),
+        downloadUrls: z.array(z.string().url()).min(1).optional(),
+        enabled: z.boolean().optional(),
+        notes: z.string().optional().nullable(),
+      }),
+    ),
+    async (c) => {
+      try {
+        const id = c.req.param("id");
+        const input = c.req.valid("json");
+        const item = await releaseService.updateRelease(id, input);
+        return ok(c, item);
+      } catch (err) {
+        if (err instanceof ReleaseError) return fail(c, err.code, err.message);
+        return handleAdminError(c, err);
+      }
+    },
+  )
+  // 删除
+  .delete("/releases/:id", async (c) => {
+    try {
+      const id = c.req.param("id");
+      await releaseService.deleteRelease(id);
+      return ok(c, null);
+    } catch (err) {
+      if (err instanceof ReleaseError) return fail(c, err.code, err.message);
+      return handleAdminError(c, err);
+    }
+  });
