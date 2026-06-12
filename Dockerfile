@@ -6,7 +6,7 @@
 # ============================================
 # Stage 2: 运行时
 # ============================================
-FROM oven/bun:1.1-alpine AS runtime
+FROM oven/bun:1.3-alpine AS runtime
 
 # 元数据
 LABEL maintainer="lixcy <lixcy@example.com>"
