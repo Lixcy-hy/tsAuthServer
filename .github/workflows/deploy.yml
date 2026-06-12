@@ -7,28 +7,17 @@ on:
     types: [completed]
   workflow_dispatch:
 
-# ⚠️ 前提：self-hosted runner 必须跑在 VPS 上（docker compose 能直接操作宿主机容器）
-# 如果 runner 和 VPS 不是同一台机器，需要改回 SSH 方式（见注释）
-
 jobs:
   deploy:
     name: Deploy
     runs-on: self-hosted
-    # workflow_run 触发时要求 CI 成功；workflow_dispatch 手动触发无条件
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment: production
     steps:
       - uses: actions/checkout@v4
-        with:
-          # runner 的 checkout 目录就是部署目录，需要完整历史
-          fetch-depth: 0
-          # ⚠️ 如果 runner 的 work 目录不是你实际部署的路径，取消下面注释并改成实际路径
-          # path: /opt/ahuan/server_ts
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.1.34
+      - name: Check Bun
+        run: bun --version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
